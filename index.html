@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智行江畔——江财校园生活智能助手</title>
+  <!-- 高德地图 JS API 2.0。Key 已由团队申请填入；如需更换：key= 处填入「Web端(JS API)」Key，
+       域名白名单填 zhixuejiangpan-team.github.io 主域名（不含子路径），并同步修改下方安全密钥 -->
+  <script>
+    window._AMapSecurityConfig = { securityJsCode: '571063ca0b165cfa6b33557071197d98' };
+  </script>
+  <script src="https://webapi.amap.com/maps?v=2.0&key=68c803d0b796714e0613f165678e3f08&plugin=AMap.Scale,AMap.Walking"></script>
+  <!-- D3.js v7 与 ECharts：CDN 引入，本地不打包 -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- 顶部标语 -->
+  <div class="slogan-bar">办事有路径，生活有答案</div>
+
+  <!-- 桌面端顶部导航（内存态路由，不用 URL hash） -->
+  <nav class="navbar">
+    <div class="nav-inner">
+      <span class="logo"><span class="logo-mark">智</span>
+        <span class="logo-text">智行江畔<small>江财校园生活智能助手</small></span></span>
+      <button class="nav-toggle" id="navToggle" aria-label="菜单">☰</button>
+      <ul class="nav-links">
+        <li><a data-nav="search" class="active">搜索</a></li>
+        <li><a data-nav="map">地图</a></li>
+        <li><a data-nav="guide">指南</a></li>
+        <li><a data-nav="mine">我的</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <!-- ============ 视图一：搜索（默认首页） ============ -->
+    <section id="view-search" class="view active">
+      <div class="container">
+        <!-- 搜索框 + 实时建议 -->
+        <div class="search-hero">
+          <h1>智行江畔</h1>
+          <p class="search-sub">江财校园生活智能助手 · 搜问题、看路径、办事情</p>
+          <div class="search-bar">
+            <input type="text" id="searchInput" placeholder="输入你的问题，如：补办学生证 / 医保报销 / 食堂" autocomplete="off">
+            <button class="btn btn-primary" id="searchBtn">搜索</button>
+          </div>
+          <div id="suggestBox" class="suggest-box" hidden></div>
+          <!-- 继续追问提示条（AI 对话历史非空时显示） -->
+          <div class="ai-context-bar" id="aiContextBar" hidden>
+            <span>💬 继续追问上次的对话</span>
+            <button class="ai-context-go" id="aiContextGo">继续</button>
+            <button class="ai-context-clear" id="aiContextClear">清除对话历史</button>
+          </div>
+        </div>
+
+        <!-- 搜索结果 -->
+        <div id="resultList" class="result-list"></div>
+
+        <!-- 热点问题 Top10 -->
+        <div class="card block-card">
+          <h3>🔥 热点问题 Top10</h3>
+          <div id="hotList"></div>
+        </div>
+
+        <!-- 搜索历史 -->
+        <div class="card block-card">
+          <h3>🕘 搜索历史</h3>
+          <div id="historyChips" class="chip-row"></div>
+        </div>
+
+        <!-- 问卷折叠面板（默认收起为一行标题） -->
+        <div class="card survey-panel" id="surveyPanel">
+          <div class="survey-header" id="surveyHeader">
+            <span>📊 需求调研验证（N=50）</span>
+            <span class="survey-arrow" id="surveyArrow">▸</span>
+          </div>
+          <div class="survey-body" id="surveyBody">
+            <div class="survey-grid">
+              <div class="survey-item"><h4 id="sqTitle-sq1"></h4><div class="survey-chart" id="chart-sq1"></div></div>
+              <div class="survey-item"><h4 id="sqTitle-sq2"></h4><div class="survey-chart" id="chart-sq2"></div></div>
+              <div class="survey-item"><h4 id="sqTitle-sq3"></h4><div class="survey-chart" id="chart-sq3"></div></div>
+              <div class="survey-item"><h4 id="sqTitle-sq4"></h4><div class="survey-chart" id="chart-sq4"></div></div>
+              <div class="survey-item"><h4 id="sqTitle-sq5"></h4><div class="survey-chart" id="chart-sq5"></div></div>
+              <div class="survey-item"><h4 id="sqTitle-sq6"></h4><div class="survey-chart" id="chart-sq6"></div></div>
+            </div>
+            <div class="survey-import">
+              <p class="survey-tip">粘贴问卷 JSON（数组，元素含 id 与 options[{text,count}]）后导入：</p>
+              <textarea id="surveyJson" rows="3" placeholder='[{"id":"sq1","options":[{"text":"300元以下","count":12},...]}]'></textarea>
+              <div class="survey-actions">
+                <button class="btn btn-primary" id="surveyImport">导入</button>
+                <button class="btn btn-ghost" id="surveyExport">导出当前数据</button>
+                <span id="surveyMsg" class="survey-msg"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 力导向问题图谱 -->
+        <div class="card block-card">
+          <h3>🕸 高频问题力导向图谱</h3>
+          <p class="graph-tip">节点大小=热度，橙色描边=涉及跨校区；点击节点查看详情</p>
+          <div id="graphWrap" class="graph-wrap"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 视图二：地图 ============ -->
+    <section id="view-map" class="view">
+      <div class="map-wrap">
+        <div id="mapBox"></div>
+        <!-- 图层控制 -->
+        <div class="map-layers card">
+          <label><input type="checkbox" id="layerCampus" checked> 校园图层</label>
+          <label><input type="checkbox" id="layerSur"> 周边图层</label>
+        </div>
+        <!-- 路线面板 -->
+        <div id="routePanel" class="route-panel card" hidden></div>
+        <!-- 点位抽屉 -->
+        <div id="spotDrawer" class="spot-drawer">
+          <div id="drawerHandle" class="drawer-handle">▴ 点位列表</div>
+          <div id="drawerList" class="drawer-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 视图三：指南 ============ -->
+    <section id="view-guide" class="view">
+      <div class="container">
+        <div class="section-head"><h2>新生办事指南</h2><p>医保 / 校历 / 办事流程一站直达</p></div>
+        <div class="tab-bar">
+          <button class="tab active" data-tab="flows">办事流程</button>
+          <button class="tab" data-tab="calendar">校历</button>
+          <button class="tab" data-tab="medical">医保指南</button>
+        </div>
+        <div id="tab-flows" class="tab-panel active"><div id="guideFlows"></div></div>
+        <div id="tab-calendar" class="tab-panel"><div id="guideCalendar" class="card"></div></div>
+        <div id="tab-medical" class="tab-panel"><div id="guideMedical"></div></div>
+      </div>
+    </section>
+
+    <!-- ============ 视图四：我的 ============ -->
+    <section id="view-mine" class="view">
+      <div class="container">
+        <!-- 指南入口卡片（移动端为指南唯一入口） -->
+        <div class="card guide-entry" id="guideEntry" role="button" tabindex="0">
+          <div class="ge-icon">📖</div>
+          <div><h3>新生办事指南</h3><p>医保/校历/办事流程一站直达</p></div>
+          <span class="ge-arrow">→</span>
+        </div>
+        <div class="card block-card">
+          <h3>👍 我的投票记录</h3>
+          <div id="mineVotes"></div>
+        </div>
+        <div class="card block-card">
+          <h3>🕘 我的搜索历史</h3>
+          <div id="mineHist" class="chip-row"></div>
+        </div>
+        <div class="card block-card">
+          <h3>ℹ️ 项目简介</h3>
+          <p class="mine-intro" id="mineTeam">智行江畔团队 · 江财校园生活智能助手：搜得到答案，看得见路径。</p>
+          <p class="mine-ver" id="mineVer">版本号 V6.6+AI</p>
+        </div>
+        <!-- 学习资源彩蛋（默认收起） -->
+        <div class="card study-panel" id="studyPanel">
+          <div class="study-header" id="studyHeader">
+            <span>📚 学习资源（彩蛋）</span>
+            <span class="study-arrow" id="studyArrow">▸</span>
+          </div>
+          <div class="study-body" id="studyBody"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 移动端底部导航：固定 3 项 -->
+  <nav class="mobile-nav">
+    <a data-nav="search" class="active"><span>🔍</span>搜索</a>
+    <a data-nav="map"><span>🗺️</span>地图</a>
+    <a data-nav="mine"><span>👤</span>我的</a>
+  </nav>
+
+  <footer class="footer">
+    <p>2026年iCAN大学生创新创业大赛参赛作品 · 江西财经大学虚拟现实（VR）现代产业学院</p>
+    <p class="footer-sub">本应用数据基于学校历年公开文件整理（2009-2020），具体政策与营业时间以学校最新通知为准。</p>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/guide-data.js"></script>
+  <script src="js/survey.js"></script>
+  <script src="js/ai-service.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
